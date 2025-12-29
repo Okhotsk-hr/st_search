@@ -15,43 +15,74 @@ type StopTime struct {
 	TripID        string `json:"trip_id"`
 }
 
-func main() {
-	filePath := "data/stop_times.json"
-	targetBin := "9300656" // 便番号
+type Stop struct {
+	StopID   string `json:"stop_id"`
+	StopName string `json:"stop_name"`
+}
 
-	// ファイル読み込み
-	data, err := os.ReadFile(filePath)
+func main() {
+	stopTimesPath := "data/stop_times.json"
+	stopsPath := "data/stops.json"
+	targetBin := "9300656"
+
+	// stop_times.json 読み込み
+	stopTimesData, err := os.ReadFile(stopTimesPath)
 	if err != nil {
-		fmt.Println("ファイル読み込みエラー:", err)
+		fmt.Println("stop_times.json 読み込みエラー:", err)
 		return
 	}
 
-	// JSONパース
-	var stops []StopTime
-	if err := json.Unmarshal(data, &stops); err != nil {
-		fmt.Println("JSONパースエラー:", err)
+	var stopTimes []StopTime
+	if err := json.Unmarshal(stopTimesData, &stopTimes); err != nil {
+		fmt.Println("stop_times.json パースエラー:", err)
 		return
+	}
+
+	// stops.json 読み込み
+	stopsData, err := os.ReadFile(stopsPath)
+	if err != nil {
+		fmt.Println("stops.json 読み込みエラー:", err)
+		return
+	}
+
+	var stops []Stop
+	if err := json.Unmarshal(stopsData, &stops); err != nil {
+		fmt.Println("stops.json パースエラー:", err)
+		return
+	}
+
+	// stop_id → stop_name のマップを作成
+	stopNameMap := make(map[string]string)
+	for _, s := range stops {
+		stopNameMap[s.StopID] = s.StopName
 	}
 
 	fmt.Println("便番号", targetBin, "の時刻一覧")
-	fmt.Println("---------------------------")
+	fmt.Println("------------------------------------------")
 
-	for _, s := range stops {
-		// trip_id を + で分割
-		parts := strings.Split(s.TripID, "+")
+	for _, st := range stopTimes {
+		parts := strings.Split(st.TripID, "+")
 		if len(parts) < 3 {
 			continue
 		}
 
 		binNo := parts[len(parts)-1]
-		if binNo == targetBin {
-			fmt.Printf(
-				"順序:%s 停留所:%s 到着:%s 出発:%s\n",
-				s.StopSequence,
-				s.StopID,
-				s.ArrivalTime,
-				s.DepartureTime,
-			)
+		if binNo != targetBin {
+			continue
 		}
+
+		stopName := stopNameMap[st.StopID]
+		if stopName == "" {
+			stopName = "(不明)"
+		}
+
+		// ★ 停留所番号を出さず、名前のみ表示
+		fmt.Printf(
+			"順序:%s 停留所:%s 到着:%s 出発:%s\n",
+			st.StopSequence,
+			stopName,
+			st.ArrivalTime,
+			st.DepartureTime,
+		)
 	}
 }
