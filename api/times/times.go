@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 	"sort"
@@ -23,6 +22,14 @@ type Stop struct {
 	StopName string `json:"stop_name"`
 }
 
+// 返却する1行分
+type TimetableItem struct {
+	Sequence      int    `json:"sequence"`
+	StopName      string `json:"stop_name"`
+	ArrivalTime   string `json:"arrival_time"`
+	DepartureTime string `json:"departure_time"`
+}
+
 func timetableHandler(w http.ResponseWriter, r *http.Request) {
 	targetBin := r.URL.Query().Get("bin")
 	if targetBin == "" {
@@ -30,11 +37,8 @@ func timetableHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stopTimesPath := "data/stop_times.json"
-	stopsPath := "data/stops.json"
-
 	// stop_times.json 読み込み
-	stopTimesData, err := os.ReadFile(stopTimesPath)
+	stopTimesData, err := os.ReadFile("data/stop_times.json")
 	if err != nil {
 		http.Error(w, "stop_times.json 読み込みエラー", 500)
 		return
@@ -47,7 +51,7 @@ func timetableHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// stops.json 読み込み
-	stopsData, err := os.ReadFile(stopsPath)
+	stopsData, err := os.ReadFile("data/stops.json")
 	if err != nil {
 		http.Error(w, "stops.json 読み込みエラー", 500)
 		return
@@ -65,48 +69,40 @@ func timetableHandler(w http.ResponseWriter, r *http.Request) {
 		stopNameMap[s.StopID] = s.StopName
 	}
 
-	// 対象便のみ抽出
-	var result []StopTime
+	// 対象便を抽出
+	var items []TimetableItem
 	for _, st := range stopTimes {
 		parts := strings.Split(st.TripID, "+")
 		if len(parts) >= 3 && parts[len(parts)-1] == targetBin {
-			result = append(result, st)
+
+			seq, _ := strconv.Atoi(st.StopSequence)
+			name := stopNameMap[st.StopID]
+			if name == "" {
+				name = "(不明)"
+			}
+
+			items = append(items, TimetableItem{
+				Sequence:      seq,
+				StopName:      name,
+				ArrivalTime:   st.ArrivalTime,
+				DepartureTime: st.DepartureTime,
+			})
 		}
 	}
 
-	if len(result) == 0 {
+	if len(items) == 0 {
 		http.Error(w, "指定された便番号のデータがありません", http.StatusNotFound)
 		return
 	}
 
-	// stop_sequence で並び替え
-	sort.Slice(result, func(i, j int) bool {
-		a, _ := strconv.Atoi(result[i].StopSequence)
-		b, _ := strconv.Atoi(result[j].StopSequence)
-		return a < b
+	// 順序でソート
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Sequence < items[j].Sequence
 	})
 
-	// テキストとして返す
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-
-	fmt.Fprintf(w, "便番号 %s の時刻一覧\n", targetBin)
-	fmt.Fprintln(w, "------------------------------------------")
-
-	for _, st := range result {
-		stopName := stopNameMap[st.StopID]
-		if stopName == "" {
-			stopName = "(不明)"
-		}
-
-		fmt.Fprintf(
-			w,
-			"順序:%s 停留所:%s 到着:%s 出発:%s\n",
-			st.StopSequence,
-			stopName,
-			st.ArrivalTime,
-			st.DepartureTime,
-		)
-	}
+	// JSON配列として返す
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	json.NewEncoder(w).Encode(items)
 }
 
 func main() {
