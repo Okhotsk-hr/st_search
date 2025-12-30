@@ -30,5 +30,9 @@
 
 ### API説明
 #### times.go
-便の番号を入れたら各停留所と着発時刻を返す
+便の番号を入れたら各停留所と着発時刻を返す<br>
 "http://localhost:8080/timetable?bin=9300656"
+
+#### station_timetable.go
+駅名を入れたら駅の路線/行先/曜日別発車時刻データを3次元配列で返す<br>
+"http://localhost:8080/timetable?stop_name=さっぽろ"
