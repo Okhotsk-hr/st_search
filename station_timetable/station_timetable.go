@@ -19,6 +19,11 @@ type StopTime struct {
 	TripID        string `json:"trip_id"`
 }
 
+type Route struct {
+	RouteID       string `json:"route_id"`
+	RouteLongName string `json:"route_long_name"`
+}
+
 func main() {
 	// ========= 駅名入力 =========
 	fmt.Print("駅名を入力してください: ")
@@ -27,11 +32,7 @@ func main() {
 	stationName := strings.TrimSpace(in.Text())
 
 	// ========= stops.json =========
-	stopsFile, err := os.Open("data/stops.json")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
+	stopsFile, _ := os.Open("data/stops.json")
 	defer stopsFile.Close()
 
 	var stops []Stop
@@ -50,12 +51,20 @@ func main() {
 		return
 	}
 
-	// ========= stop_times.json =========
-	timesFile, err := os.Open("data/stop_times.json")
-	if err != nil {
-		fmt.Println(err)
-		return
+	// ========= routes.json =========
+	routesFile, _ := os.Open("data/routes.json")
+	defer routesFile.Close()
+
+	var routes []Route
+	json.NewDecoder(routesFile).Decode(&routes)
+
+	routeMap := make(map[string]string)
+	for _, r := range routes {
+		routeMap[r.RouteID] = r.RouteLongName
 	}
+
+	// ========= stop_times.json =========
+	timesFile, _ := os.Open("data/stop_times.json")
 	defer timesFile.Close()
 
 	var stopTimes []StopTime
@@ -63,7 +72,7 @@ func main() {
 
 	fmt.Println("departure_time 一覧:")
 
-	var prevHead string
+	var prevRoute string
 	var prevMid string
 	first := true
 
@@ -77,13 +86,17 @@ func main() {
 			continue
 		}
 
-		head := parts[0] // 先頭6桁
-		mid := parts[1]  // 真ん中文字列
+		routeID := parts[0]
+		mid := parts[1]
 
-		// 区切り判定
-		if first || head != prevHead || mid != prevMid {
-			fmt.Println("----", head, mid, "----")
-			prevHead = head
+		routeName, ok := routeMap[routeID]
+		if !ok {
+			routeName = routeID // 見つからなければ番号表示
+		}
+
+		if first || routeID != prevRoute || mid != prevMid {
+			fmt.Println("----", routeName, mid, "----")
+			prevRoute = routeID
 			prevMid = mid
 			first = false
 		}
